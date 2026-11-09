@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pseudoternary Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.4/dist/mqtt.min.js"></script>
+<style>
+:root{--bg:#fbfcf4;--ink:#1f2a17;--mut:#6c775f;--line:#e4ead6;--g:#5b8a2f;--g2:#4d9a47;--terra:#cc673c;--sage:#aeb89c;--wave:#6a9a45;
+--serif:"Newsreader","Iowan Old Style",Georgia,serif;--sans:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;
+color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans)}
+.wrap{max-width:1200px;margin:0 auto;padding:0 20px 32px}
+header{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
+.brand{font:500 1.5rem var(--serif)}
+#pill{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 18px;font-weight:600;font-size:.95rem}
+#pill i{width:9px;height:9px;border-radius:50%;background:#8a9a70}#pill.on i{background:var(--g2)}#pill.off i{background:var(--terra)}
+h1{font:500 clamp(2.3rem,6vw,4.4rem)/1.06 var(--serif);letter-spacing:-.02em;text-align:center;margin:32px auto;max-width:14em}
+h2,h3{font-family:var(--serif);font-weight:500;margin:0}
+.panel{background:linear-gradient(135deg,#e1edc9,#d2e7b1);border-radius:44px;padding:clamp(14px,4vw,56px)}
+.card{background:#fff;border-radius:30px;box-shadow:0 0 0 8px rgba(255,255,255,.55),0 14px 40px rgba(60,90,30,.1)}
+#join .card{max-width:600px;margin:0 auto;padding:30px}
+label{display:block;font-size:.9rem;color:var(--mut);margin:14px 0 6px}
+input,textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:12px 16px}
+:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+.row{display:flex;gap:10px;align-items:center}
+.seg{display:inline-flex;background:#fff;border-radius:999px;padding:5px;box-shadow:0 0 0 1px var(--line);flex-wrap:wrap}
+.seg button{border:0;background:none;border-radius:999px;padding:10px 22px;font:inherit;color:var(--mut);cursor:pointer}
+.seg button.on{background:var(--g);color:#fff}
+.btn{border:0;cursor:pointer;font:inherit;font-weight:600;color:#fff;background:var(--g);border-radius:999px;padding:12px 26px;transition:background .15s,transform .1s}
+.btn:hover{background:#4f7d28}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:#fff;color:var(--ink);box-shadow:0 0 0 1px var(--line)}.btn.ghost:hover{background:var(--bg)}
+.ib{flex:none;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;display:grid;place-items:center;transition:background .15s}
+.ib:hover{background:var(--bg)}.ib:disabled{opacity:.4;cursor:not-allowed}.ib svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ib.rec{background:var(--terra);color:#fff;border-color:var(--terra);animation:pl 1.2s infinite}@keyframes pl{50%{opacity:.55}}
+.hint{color:var(--mut);font-size:.85rem;margin:14px 0 0}.err{color:var(--terra);font-size:.9rem;margin-top:8px;min-height:1.3em}
+#app{display:none}
+.chat{display:grid;grid-template-columns:230px minmax(0,1fr) 350px;height:min(740px,calc(100vh - 190px));height:min(740px,calc(100dvh - 190px));overflow:hidden;position:relative}
+.chat.noinsp{grid-template-columns:230px minmax(0,1fr) 0}
+.side{border-right:1px solid var(--line);padding:22px 18px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.side h3{font-size:1.5rem}.mut{color:var(--mut);font-size:.85rem}
+.mem{display:flex;align-items:center;gap:10px;margin:8px 0}
+.av{flex:none;width:32px;height:32px;border-radius:50%;color:#fff;display:grid;place-items:center;font-weight:600;font-size:.9rem}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.top{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.top h3{font-size:1.35rem;line-height:1.1}.sp{flex:1}
+#msgs{flex:1;overflow-y:auto;padding:12px 20px;overscroll-behavior:contain}
+#msgs:empty::before{content:attr(data-e);display:block;text-align:center;color:var(--mut);font-size:.9rem;margin:40px 20px}
+.m{max-width:78%;width:fit-content;margin:6px 0}.m.me{margin-left:auto}
+.nm{font-size:.8rem;font-weight:600;margin:6px 4px 3px}
+.b{padding:9px 14px;border-radius:20px 20px 20px 6px;background:var(--bg);border:1px solid var(--line);cursor:pointer;word-break:break-word;white-space:pre-wrap}
+.me .b{background:var(--g);color:#fff;border-color:var(--g);border-radius:20px 20px 6px 20px}
+.b.lock,.me .b.lock{font:.8rem/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--mut);background:#fff;border:1px dashed var(--sage)}
+.b.sel{box-shadow:0 0 0 3px rgba(91,138,47,.35)}
+.b.med{padding:4px}.b img{display:block;max-width:100%;max-height:300px;border-radius:16px}
+.b audio{display:block;width:230px;max-width:100%;height:38px}
+.b a.f{display:flex;gap:10px;align-items:center;color:inherit;text-decoration:none;padding:6px 10px}.b a.f svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+.pg{height:3px;border-radius:3px;background:var(--line);margin:4px 6px 0;overflow:hidden}.pg i{display:block;height:100%;width:100%;background:var(--g2);transition:width .5s linear}
+.tm{font-size:.7rem;color:var(--mut);margin:2px 6px 0}.me .tm{text-align:right}
+#typing{height:22px;padding:0 24px;font-size:.82rem;color:var(--mut)}
+.comp{display:flex;gap:8px;align-items:center;padding:10px 16px 6px;border-top:1px solid var(--line)}.comp input{border-radius:999px}
+.opt{padding:0 20px 10px;font-size:.8rem;color:var(--mut)}.opt label{margin:0;display:inline}.opt input{width:auto;vertical-align:middle;margin-right:6px}
+.insp{border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:#fff}
+.insp .hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px}.insp .seg button{padding:8px 18px;font-size:.9rem}
+#xc{display:none}#ins{flex:1;overflow:auto;padding:0 18px 18px}
+.st{margin:0 0 14px}.st b{font:500 1.05rem var(--serif);display:block}
+code,.lv{display:block;font:.76rem/1.5 ui-monospace,Menlo,Consolas,monospace;word-break:break-all;margin-top:3px;color:#35432a}
+.lv i{font-style:normal;font-weight:700}.lv i.p{color:var(--g2)}.lv i.n{color:var(--terra)}.lv i.z{color:var(--sage)}
+svg.wv{width:100%;height:48px;margin-top:6px;background:var(--bg);border-radius:12px}
+.warn{color:var(--terra);font-size:.82rem}.ok{color:var(--g);font-weight:600}.w{padding:9px 0;border-top:1px solid var(--line)}
+.fr{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px}.fc{text-align:center;border:1px solid var(--line);border-radius:8px;padding:2px 4px;min-width:36px}.fc.f{background:#eef3df}
+.fc small{display:block;font-size:.58rem;color:var(--mut)}.fc b{display:block;font:600 .85rem var(--sans)}.fc em{font-style:normal;font-weight:700;font-size:.8rem}.fc em.p{color:var(--g2)}.fc em.n{color:var(--terra)}.fc em.z{color:var(--sage)}
+#toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:999px;padding:8px 18px;font-size:.85rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:7;white-space:nowrap}#toast.on{opacity:1}
+.modal{position:absolute;inset:0;background:rgba(31,42,23,.4);display:none;place-items:center;z-index:6}.modal.on{display:grid}.modal .card{padding:24px;width:min(380px,90%);box-shadow:0 20px 50px rgba(0,0,0,.25)}
+@media (max-width:980px){
+ .wrap{padding:0 10px 10px}header{padding:12px 8px}.panel{border-radius:28px}#app .panel{padding:8px!important;border-radius:26px}
+ .chat,.chat.noinsp{display:block;height:calc(100vh - 118px);height:calc(100dvh - 118px)}.card.chat{box-shadow:0 0 0 4px rgba(255,255,255,.55)}
+ .side{display:none}.main{height:100%}.m{max-width:88%}.opt{padding-bottom:6px}
+ .insp{position:absolute;left:0;right:0;bottom:0;height:80%;border:0;border-radius:28px 28px 0 0;box-shadow:0 -10px 40px rgba(31,42,23,.2);transform:translateY(105%);transition:transform .25s;z-index:4}
+ .insp.open{transform:none}#xc{display:grid}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><span class="brand">Pseudoternary</span><span id="pill"><i></i><span>Siap</span></span></header>
+
+<section id="join">
+<h1>Kirim pesan. Hanya kalian yang bisa membacanya.</h1>
+<div class="panel"><div class="card">
+<div class="seg" id="role"><button class="on" data-v="p">Peserta</button><button data-v="s">Penyadap</button></div>
+<label for="nm">Nama</label><input id="nm" maxlength="16" autocomplete="off">
+<label for="rm">Kode ruang</label><input id="rm" maxlength="24" autocomplete="off" placeholder="mis. jarkomdat">
+<div id="kw"><label for="kk">Kunci privat (minimal 8 karakter, tidak pernah dikirim atau disimpan)</label>
+<div class="row"><input id="kk" type="password" autocomplete="off"><button class="btn ghost" id="gen" type="button">Acak</button></div></div>
+<label>Parity pada tiap frame</label><div class="seg" id="sp"><button class="on" data-v="e">Even parity</button><button data-v="o">Odd parity</button></div>
+<label>Polaritas awal tiap frame (konsisten)</label><div class="seg" id="sh"><button class="on" data-v="h">High (+V)</button><button data-v="l">Low (\u2212V)</button></div>
+<label for="lk">Pesan terkunci otomatis setelah</label><select id="lk"><option value="15">15 detik</option><option value="30" selected>30 detik</option><option value="60">60 detik</option><option value="0">Tidak pernah</option></select>
+<p class="hint" id="rh">Semua peserta harus memakai kode ruang, kunci, parity, dan polaritas yang sama. Bagikan kunci lewat jalur lain, bukan lewat chat ini.</p>
+<div class="err" id="err"></div>
+<button class="btn" id="go" style="margin-top:6px">Masuk ke ruang</button>
+</div></div>
+</section>
+
+<section id="app"><div class="panel" style="padding:clamp(10px,2.4vw,36px)"><div class="card chat" id="chat">
+<aside class="side"><div><h3 id="rn"></h3><div class="mut">AES-256-GCM, frame start/parity/stop, sinyal pseudoternary</div></div>
+<div><div class="mut" id="mc"></div><div id="mem"></div></div>
+<div class="mut" id="dbs"></div>
+<button class="btn ghost" id="unl">Buka pesan terkunci</button>
+<button class="btn ghost" id="out">Keluar dari ruang</button></aside>
+<div class="main">
+<div class="top"><button class="ib" id="back" aria-label="Kembali"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+<div><h3 id="tt"></h3><div class="mut" id="sub"></div></div><span class="sp"></span><button class="btn ghost" id="unl2" style="padding:9px 14px">Buka</button><button class="btn ghost" id="tinfo" style="padding:9px 18px">Proses</button></div>
+<div id="msgs"></div><div id="typing"></div>
+<div class="comp">
+<input type="file" id="fi" hidden>
+<button class="ib" id="att" aria-label="Kirim gambar atau file"><svg viewBox="0 0 24 24"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.3-8.3"/></svg></button>
+<button class="ib" id="mic" aria-label="Rekam pesan suara"><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3"/></svg></button>
+<input id="tx" maxlength="400" placeholder="Tulis pesan" autocomplete="off"><button class="btn" id="sd">Kirim</button></div>
+<div class="opt"><label><input type="checkbox" id="nz">Simulasikan gangguan di jalur saat mengirim</label></div></div>
+<div class="insp" id="insp"><div class="hd"><div class="seg" id="tabs"><button class="on" data-v="proc">Proses</button><button data-v="wire">Jalur</button></div><button class="ib" id="xc" aria-label="Tutup"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div id="ins"></div></div>
+<div class="modal" id="kq"><div class="card"><h3>Masukkan kunci</h3><p class="mut">Pesan ditampilkan dalam bentuk encode. Masukkan kunci privat untuk membukanya.</p><input id="kqi" type="password" autocomplete="off"><div class="err" id="kqe"></div><div class="row" style="justify-content:flex-end"><button class="btn ghost" id="kqc">Batal</button><button class="btn" id="kqo">Buka</button></div></div></div>
+<div id="toast"></div>
+</div></div></section>
+<p class="hint" style="text-align:center;margin-top:20px">Database dan broker hanya menyimpan dan meneruskan data terenkripsi dalam bentuk sinyal. Batas media 64 KB, gambar dikompres otomatis.</p>
+</div>
+<script>
+/* ===== Konfigurasi database (opsional). Isi dari Supabase lalu jalankan supabase_setup.sql =====
+   Jika kosong, riwayat disimpan di database lokal browser (IndexedDB). */
+const SUPA={url:'https://xyrkjabliiklkgcckyts.supabase.co',key:'sb_publishable_dZcs9t4OsaA_DmbY25j8XQ_eH7jygdf'};
+
+const $=s=>document.querySelector(s),te=new TextEncoder(),td=new TextDecoder(),T=Uint8Array,MAXB=64000,mq=matchMedia('(max-width:980px)');
+const BR=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081'];
+const PAL=['#5b8a2f','#cc673c','#7a8f5a','#b08a3c','#4d7f8a','#8a5a7a'],CS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#$%&@?!*';
+const hex=a=>[...a].map(b=>b.toString(16).padStart(2,'0')).join(' '),hx0=a=>hex(a).replace(/ /g,''),garble=a=>[...a].map(b=>CS[b%CS.length]).join('');
+const bitsOf=by=>[...by].map(b=>b.toString(2).padStart(8,'0')).join(''),hm=t=>new Date(t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const colorOf=s=>PAL[[...s].reduce((a,c)=>a+c.charCodeAt(0),0)%PAL.length],kb=n=>n<1024?n+' B':(n/1024).toFixed(1)+' KB';
+const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)},unb64=s=>T.from(atob(s),c=>c.charCodeAt(0));
+let S={role:'p',par:'e',hi:true,members:new Map(),msgs:[],wire:[],seen:new Set(),seenMid:new Set(),own:new Map(),typing:{},asm:{},tab:'proc',sel:null,els:new Map(),lockMs:30000};
+try{$('#nm').value=localStorage.pcName||'';$('#rm').value=localStorage.pcRoom||''}catch(e){}
+
+/* ===== Line coding pseudoternary + framing per karakter (1 byte = 1 frame, 11 simbol) =====
+   Frame: START(0) | D7..D0 | PARITY | STOP(1).  Bit 1 -> 0 V, bit 0 -> +/-V bergantian.
+   Polaritas pulsa pertama (START) selalu sama (High +V atau Low -V) dan di-reset tiap frame.
+   trit: 0 = -V, 1 = 0 V, 2 = +V */
+function lineEnc(by,par,hi){const t=new T(by.length*11),P=hi?2:0,Q=hi?0:2;let k=0;
+ for(const b of by){let ones=0;const seq=[0];for(let i=7;i>=0;i--){const x=(b>>i)&1;seq.push(x);ones+=x}
+  seq.push(par==='e'?ones&1:1-(ones&1));seq.push(1);let cur=P;
+  for(const x of seq){if(x)t[k++]=1;else{t[k++]=cur;cur=cur===P?Q:P}}}return t}
+function lineDec(t,par,hi){const n=Math.floor(t.length/11),by=new T(n),P=hi?2:0,Q=hi?0:2;let viol=0,pe=0,fe=0,tail=0;
+ for(let f=0;f<n;f++){let exp=P,net=0,ones=0,byte=0;
+  for(let j=0;j<11;j++){const x=t[f*11+j];let bit=1;if(x!==1){bit=0;if(x!==exp)viol++;exp=exp===P?Q:P;net+=x===2?1:-1}
+   if(j===0&&bit!==0)fe++;if(j>=1&&j<=8){byte=(byte<<1)|bit;ones+=bit}
+   if(j===9&&(ones+bit)%2!==(par==='e'?0:1))pe++;if(j===10&&bit!==1)fe++}
+  if(net!==0)tail++;by[f]=byte}return{by,viol,pe,fe,tail,n}}
+function pack(t){const o=new T(Math.ceil(t.length/5));for(let i=0;i<o.length;i++){let v=0,m=1;for(let j=0;j<5;j++){v+=(i*5+j<t.length?t[i*5+j]:1)*m;m*=3}o[i]=v}return o}
+function unpack(p){const t=new T(p.length*5);for(let i=0;i<p.length;i++){let v=p[i];for(let j=0;j<5;j++){t[i*5+j]=v%3;v=(v/3)|0}}return t}
+const sym=(t,n)=>[...t.subarray(0,n)].map(x=>'-0+'[x]).join('');
+const lvH=(s,tot)=>[...s].map(c=>`<i class="${c==='+'?'p':c==='-'?'n':'z'}">${c==='-'?'\u2212':c}</i>`).join('')+(tot>s.length?` \u2026 (+${tot-s.length})`:'');
+function wave(s){s=s.slice(0,44);const w=10,Y={'+':9,'0':24,'-':39};let d='';[...s].forEach((c,i)=>d+=(i?'L':'M')+i*w+' '+Y[c]+'L'+(i+1)*w+' '+Y[c]);
+ return `<svg class="wv" viewBox="0 0 ${s.length*w} 48" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="var(--wave)" stroke-width="2"/></svg>`}
+const info=(by,t)=>({pre:sym(t,66),ns:by.length*11,bp:bitsOf(by.slice(0,4)),hx:`iv ${hex(by.slice(0,6))}\u2026 | ct+tag ${hex(by.slice(12,20))}\u2026 (${by.length} byte)`});
+function frameDemo(b){let ones=0;for(let i=0;i<8;i++)ones+=(b>>i)&1;const pb=S.par==='e'?ones&1:1-(ones&1),t=lineEnc(T.of(b),S.par,S.hi),bits=[0];
+ for(let i=7;i>=0;i--)bits.push((b>>i)&1);bits.push(pb,1);const lab=['START','D7','D6','D5','D4','D3','D2','D1','D0','PAR','STOP'];
+ return '<div class="fr">'+bits.map((x,i)=>`<span class="fc${i===0||i>8?' f':''}"><small>${lab[i]}</small><b>${x}</b><em class="${t[i]===2?'p':t[i]===0?'n':'z'}">${['\u2212','0','+'][t[i]]}</em></span>`).join('')+'</div>'}
+
+/* ===== Kriptografi: AES-256-GCM. Kunci + tag ruang dari PBKDF2; nama ruang tidak pernah keluar perangkat ===== */
+async function mkKey(pw,room){const m=await crypto.subtle.importKey('raw',te.encode(pw),'PBKDF2',false,['deriveBits']);
+ const salt=new T(await crypto.subtle.digest('SHA-256',te.encode('pseudochat:v3:'+room))),b=new T(await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},m,384));
+ return{key:await crypto.subtle.importKey('raw',b.slice(0,32),'AES-GCM',false,['encrypt','decrypt']),tag:hx0(b.slice(32,48))}}
+const bucket=n=>{for(const s of [256,1024,4096,16384,65536])if(n<=s)return s;return Math.ceil(n/16384)*16384};
+async function seal(o,bin=new T(0)){o.bl=bin.length;const h=te.encode(JSON.stringify(o)),pt=new T(bucket(4+h.length+bin.length));/* padding menyembunyikan panjang pesan */
+ new DataView(pt.buffer).setUint32(0,h.length);pt.set(h,4);pt.set(bin,4+h.length);
+ const iv=crypto.getRandomValues(new T(12)),ct=new T(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:te.encode(S.tag)},S.key,pt)),r=new T(12+ct.length);r.set(iv);r.set(ct,12);return r}
+async function unseal(by,key=S.key){const pt=new T(await crypto.subtle.decrypt({name:'AES-GCM',iv:by.slice(0,12),additionalData:te.encode(S.tag)},key,by.slice(12))),hl=new DataView(pt.buffer).getUint32(0),o=JSON.parse(td.decode(pt.slice(4,4+hl)));
+ return{o,bin:pt.slice(4+hl,4+hl+(o.bl||0))}}
+
+/* ===== Database: Supabase (REST) atau IndexedDB lokal. Hanya menyimpan frame terenkripsi ===== */
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('pcdb3',1);r.onupgradeneeded=()=>{const s=r.result.createObjectStore('f',{keyPath:'id'});s.createIndex('room','room')};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+const idbAll=async q=>{const d=await idb();return new Promise((res,rej)=>{const s=d.transaction('f').objectStore('f'),rq=q?s.index('room').getAll(q):s.getAll();rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)})};
+const sh=()=>SUPA.key.startsWith('sb_')?{apikey:SUPA.key}:{apikey:SUPA.key,Authorization:'Bearer '+SUPA.key};
+async function dbPut(id,room,frame){if(SUPA.url){const r=await fetch(SUPA.url+'/rest/v1/frames',{method:'POST',headers:{...sh(),'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({id,room,frame})});if(!r.ok)throw 0;return}
+ const d=await idb();await new Promise((res,rej)=>{const q=d.transaction('f','readwrite').objectStore('f').put({id,room,frame,created_at:new Date().toISOString()});q.onsuccess=res;q.onerror=rej})}
+async function dbGet(room,leak){if(SUPA.url){const q=leak?'select=id,room,frame,created_at&order=created_at.desc&limit=6':`select=id,frame,created_at&room=eq.${room}&order=created_at.asc&limit=100`;
+  const r=await fetch(SUPA.url+'/rest/v1/frames?'+q,{headers:sh()});if(!r.ok)throw 0;return r.json()}
+ const a=(await idbAll(leak?null:room)).sort((x,y)=>x.created_at<y.created_at?-1:1);return leak?a.slice(-6).reverse():a.slice(-100)}
+
+/* ===== UI umum ===== */
+function pill(t,c){const p=$('#pill');p.className=c||'';p.lastChild.textContent=t}
+let tt0;function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(tt0);tt0=setTimeout(()=>e.classList.remove('on'),2800)}
+let rq=0;const later=()=>rq||(rq=requestAnimationFrame(()=>{rq=0;renderSide();renderIns()}));
+function seg(id,fn){document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.toggle('on',x===b));fn(b.dataset.v)})}
+seg('role',v=>{S.role=v;$('#kw').style.display=v==='s'?'none':'block'});seg('sp',v=>S.par=v);seg('sh',v=>S.hi=v==='h');seg('tabs',v=>{S.tab=v;renderIns()});
+const setTab=t=>{S.tab=t;document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x.dataset.v===t))};
+$('#gen').onclick=()=>{const a=crypto.getRandomValues(new T(14));$('#kk').type='text';$('#kk').value=[...a].map(b=>CS[b%62]).join('')};
+function openSheet(){if(!$('#insp').classList.contains('open')){$('#insp').classList.add('open');try{history.pushState({v:'sheet'},'','#info')}catch(e){}}}
+function inspect(id){S.sel=id;setTab('proc');if(mq.matches)openSheet();else $('#chat').classList.remove('noinsp');refreshSel();renderIns()}
+$('#tinfo').onclick=()=>{if(mq.matches){$('#insp').classList.contains('open')?history.back():openSheet()}else $('#chat').classList.toggle('noinsp')};
+$('#xc').onclick=()=>history.back();
+const goBack=()=>history.state&&history.state.v?history.back():leave();$('#back').onclick=goBack;$('#out').onclick=goBack;
+addEventListener('popstate',e=>{const v=e.state&&e.state.v;if(v==='chat'||v==='sheet'){if(v==='chat')$('#insp').classList.remove('open');return}if($('#app').style.display==='block')leave()});
+
+/* ===== Masuk / keluar ===== */
+async function enter(){
+ const name=$('#nm').value.trim().slice(0,16),room=$('#rm').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,24),pw=$('#kk').value,spy=S.role==='s',err=t=>$('#err').textContent=t;
+ if(!window.mqtt)return err('Pustaka koneksi gagal dimuat. Periksa internet lalu muat ulang halaman.');
+ if(!spy&&!name)return err('Isi nama kamu.');if(!spy&&!room)return err('Isi kode ruang.');if(!spy&&pw.length<8)return err('Kunci privat minimal 8 karakter.');
+ err('');$('#go').disabled=true;pill('Menyiapkan kunci\u2026');try{localStorage.pcName=name;localStorage.pcRoom=room}catch(e){}
+ let k=null;if(!spy)k=await mkKey(pw,room);
+ Object.assign(S,{room,spy,key:k&&k.key,tag:k?k.tag:'',base:spy?'pseudochat/v3':'pseudochat/v3/'+k.tag,lockMs:(+$('#lk').value)*1000,me:{id:hx0(crypto.getRandomValues(new T(4))),name:spy?'Penyadap':name,color:colorOf(name||'x')},
+  members:new Map(),msgs:[],wire:[],seen:new Set(),seenMid:new Set(),own:new Map(),typing:{},asm:{},sel:null,els:new Map(),will:undefined});
+ setTab(spy?'wire':'proc');
+ if(!spy){const w=await seal({k:'x',u:S.me.id});S.will={topic:S.base+'/p',payload:b64(pack(lineEnc(w,S.par,S.hi))),qos:0,retain:false}}
+ $('#join').style.display='none';$('#app').style.display='block';$('#msgs').innerHTML='';
+ $('#msgs').dataset.e=spy?'Penyadap hanya melihat sinyal yang lewat. Isi pesan tidak bisa dibaca.':'Belum ada pesan. Undang teman dengan kode ruang dan kunci yang sama.';
+ $('#rn').textContent=spy?'Penyadap':'#'+room;$('#tt').textContent=spy?'Jalur (penyadap)':'#'+room;
+ ['#tx','#sd','#att','#mic'].forEach(s=>$(s).disabled=spy);$('#tx').placeholder=spy?'Penyadap tidak bisa mengirim':'Tulis pesan';
+ $('#dbs').textContent='Database: '+(SUPA.url?'Supabase (terenkripsi)':'lokal di browser (IndexedDB)')+' \u00b7 '+(S.par==='e'?'even':'odd')+' parity \u00b7 mulai '+(S.hi?'High (+V)':'Low (\u2212V)');
+ try{history.pushState({v:'chat'},'','#chat')}catch(e){}
+ connect(0);renderSide();renderIns();$('#go').disabled=false;scrollTo(0,0);if(!spy)loadHist()}
+async function loadHist(){try{const rows=await dbGet(S.tag);for(const r of rows){if(S.seenMid.has(r.id)||r.frame.length>4e5)continue;S.seenMid.add(r.id);
+  const t=unpack(unb64(r.frame)),f=lineDec(t,S.par,S.hi);S.msgs.push({id:'h'+r.id,locked:true,hist:true,ts:Date.parse(r.created_at),fr:f.by,rxi:{...info(f.by,t),v:f.viol,pe:f.pe,fe:f.fe,tail:f.tail,nf:f.n}})}
+  renderMsgs();if(rows.length)toast(rows.length+' pesan riwayat dimuat dalam bentuk encode')}catch(e){toast('Database tidak bisa dihubungi.')}}
+function leave(){try{S.will&&S.cli&&S.cli.publish(S.will.topic,S.will.payload)}catch(e){}
+ if(S.cli){S.cli.end(true);S.cli=null}S.msgs.forEach(m=>m.url&&URL.revokeObjectURL(m.url));S.msgs=[];S.els.clear();$('#msgs').innerHTML='';$('#kq').classList.remove('on');
+ $('#insp').classList.remove('open');$('#app').style.display='none';$('#join').style.display='block';pill('Siap')}
+$('#go').onclick=enter;addEventListener('pagehide',()=>{try{S.will&&S.cli.publish(S.will.topic,S.will.payload)}catch(e){}});
+
+/* ===== Jaringan (realtime lewat MQTT; topik memakai hash ruang, bukan nama ruang) ===== */
+function connect(i){
+ const c=mqtt.connect(BR[i],{clientId:'pc_'+S.me.id+Math.random().toString(16).slice(2,6),reconnectPeriod:3000,connectTimeout:7000,clean:true,will:S.will});
+ S.cli=c;pill('Menghubungkan\u2026');let ok=false;const next=()=>{if(!ok&&i+1<BR.length&&S.cli===c){c.end(true);connect(i+1)}};
+ c.on('connect',()=>{ok=true;pill('Terhubung','on');c.subscribe(S.base+'/#');beat()});
+ c.on('reconnect',()=>pill('Menghubungkan ulang\u2026'));c.on('offline',()=>pill('Terputus','off'));c.on('error',next);
+ c.on('message',(t,p)=>{try{onMsg(t,p.toString())}catch(e){}});setTimeout(next,8000)}
+async function pub(kind,o,bin,noise,mid){
+ const by=await seal(o,bin),t=lineEnc(by,S.par,S.hi),clean=pack(t);if(noise){const i=Math.floor(Math.random()*t.length);t[i]=(t[i]+1+(Math.random()<.5?0:1))%3}
+ const p=pack(t);if(kind==='p'){S.cli.publish(S.base+'/p',b64(p));return{by,t}}
+ const C=24000,n=Math.ceil(p.length/C);for(let i=0;i<n;i++)S.cli.publish(S.base+'/m/'+mid+'.'+i+'.'+n,b64(p.subarray(i*C,(i+1)*C)));return{by,t,clean}}
+const beat=()=>{if(S.cli&&S.cli.connected&&!S.spy)pub('p',{k:'h',u:S.me.id,n:S.me.name,c:S.me.color})};setInterval(beat,8000);
+setInterval(()=>{const t=Date.now();let ch=false;S.members.forEach((m,id)=>{if(t-m.t>22000){S.members.delete(id);ch=true}});for(const k in S.asm)if(t-S.asm[k].t>60000)delete S.asm[k];if(ch||Object.keys(S.typing).length)later()},3000);
+function onMsg(topic,payload){const parts=topic.split('/').slice(3);if(payload.length>400000)return;
+ if(parts[0]==='p')return onPkt('p',unpack(unb64(payload)));
+ if(parts[0]!=='m'||!parts[1])return;const[mid,i,n]=parts[1].split('.');if(!(+n>0&&+n<=32&&+i>=0&&+i<+n))return;
+ const a=S.asm[mid]||(S.asm[mid]={p:[],n:+n,g:0,t:Date.now()});if(a.p[+i])return;a.p[+i]=unb64(payload);a.g++;
+ if(a.g===a.n){delete S.asm[mid];let L=0;a.p.forEach(x=>L+=x.length);const j=new T(L);let o=0;a.p.forEach(x=>{j.set(x,o);o+=x.length});onPkt('m',unpack(j),mid)}}
+
+/* ===== Menerima ===== */
+function mk(o,bin,fr){
+ const m={id:String(o.i),name:String(o.n||'?').slice(0,16),color:/^#[0-9a-f]{6}$/i.test(o.c)?o.c:'#5b8a2f',ts:+o.t||Date.now(),mine:o.u===S.me.id,ty:'t',text:String(o.m||'').slice(0,1000),nm:String(o.nm||'').slice(0,60),sz:bin.length,fr,locked:false,exp:S.lockMs?Date.now()+S.lockMs:0};
+ if(o.ty==='img'&&/^image\/(jpeg|png|webp|gif)$/.test(o.mt)||o.ty==='aud'&&/^audio\/(webm|ogg|mp4|mpeg|wav|x-m4a)$/.test(o.mt)){m.ty=o.ty;m.mt=o.mt}
+ else if(o.ty){m.ty='file';m.mt='application/octet-stream'}
+ if(m.ty!=='t')m.url=URL.createObjectURL(new Blob([bin],{type:m.mt}));return m}
+async function onPkt(kind,t,mid){
+ const f=lineDec(t,S.par,S.hi);if(f.by.length<29)return;const now=Date.now(),ri={...info(f.by,t),v:f.viol,pe:f.pe,fe:f.fe,tail:f.tail,nf:f.n};
+ S.wire.unshift({t:now,kind,...ri,nb:f.by.length,g:garble(f.by.subarray(0,48))});S.wire.length=Math.min(S.wire.length,40);
+ if(kind==='m'){
+  const mine=S.own.get(mid);if(mine){mine.rxi=ri;later();return}if(S.seenMid.has(mid))return;S.seenMid.add(mid);
+  let r=null;if(!S.spy)try{r=await unseal(f.by)}catch(e){}
+  if(!r)S.msgs.push({id:'x'+mid,locked:true,ts:now,fr:f.by,rxi:ri});
+  else if(r.o.k==='m'&&r.bin.length<=2e5&&!S.seen.has(r.o.i)){S.seen.add(r.o.i);const m=mk(r.o,r.bin,f.by);m.rxi=ri;S.msgs.push(m)}
+  renderMsgs()}
+ else if(!S.spy){let r=null;try{r=await unseal(f.by)}catch(e){}if(r){const o=r.o;if(o.k==='h'){S.members.set(o.u,{n:String(o.n).slice(0,16),c:o.c,t:now});delete S.typing[o.u]}else if(o.k==='x')S.members.delete(o.u);else if(o.k==='t'&&o.u!==S.me.id)S.typing[o.u]={n:String(o.n).slice(0,16),t:now}}}
+ later()}
+
+/* ===== Mengirim ===== */
+async function sendMsg(extra,bin){
+ if(S.spy)return;if(!S.cli||!S.cli.connected)return toast('Belum terhubung ke server.');
+ const o={k:'m',i:crypto.randomUUID(),u:S.me.id,n:S.me.name,c:S.me.color,t:Date.now(),...extra},nz=$('#nz').checked,mid=hx0(crypto.getRandomValues(new T(8))),m=mk(o,bin,null);
+ m.pending=true;m.noisy=nz;S.seen.add(o.i);S.seenMid.add(mid);S.own.set(mid,m);S.msgs.push(m);S.sel=o.i;renderMsgs();later();
+ try{const r=await pub('m',o,bin,nz,mid);m.fr=r.by;m.eni={...info(r.by,r.t)};
+  try{await dbPut(mid,S.tag,b64(r.clean))}catch(e){toast('Database tidak bisa dihubungi: pesan hanya terkirim real-time.')}}
+ catch(e){toast('Gagal mengirim pesan.')}m.pending=false;renderMsgs();later()}
+function sendText(){const v=$('#tx').value.trim();if(!v)return;$('#tx').value='';sendMsg({m:v},new T(0))}
+$('#sd').onclick=sendText;$('#tx').addEventListener('keydown',e=>{if(e.key==='Enter')sendText()});
+let lastT=0;$('#tx').addEventListener('input',()=>{const n=Date.now();if(n-lastT>2500&&S.cli&&S.cli.connected&&!S.spy){lastT=n;pub('p',{k:'t',u:S.me.id,n:S.me.name})}});
+async function shrink(file){const bm=await createImageBitmap(file);let s=Math.min(1,640/Math.max(bm.width,bm.height)),q=.7;
+ for(let i=0;i<7;i++){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(bm.width*s));c.height=Math.max(1,Math.round(bm.height*s));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(bm,0,0,c.width,c.height);
+  const b=await new Promise(r=>c.toBlob(r,'image/jpeg',q));if(b.size<=MAXB||i===6)return b;q=Math.max(.3,q-.1);s*=.8}}
+async function sendFile(file){if(!file||S.spy)return;
+ try{if(file.type.startsWith('image/')){toast('Mengompres gambar\u2026');const b=await shrink(file);if(b.size>MAXB)return toast('Gambar terlalu besar.');
+   return sendMsg({ty:'img',mt:'image/jpeg',nm:file.name.replace(/\.\w+$/,'')+'.jpg'},new T(await b.arrayBuffer()))}
+  if(file.size>MAXB)return toast('File terlalu besar (maks '+kb(MAXB)+').');
+  sendMsg({ty:'file',mt:file.type||'application/octet-stream',nm:file.name},new T(await file.arrayBuffer()))}catch(e){toast('Berkas tidak bisa diproses.')}}
+$('#att').onclick=()=>$('#fi').click();$('#fi').onchange=e=>{sendFile(e.target.files[0]);e.target.value=''};
+$('#msgs').addEventListener('dragover',e=>e.preventDefault());$('#msgs').addEventListener('drop',e=>{e.preventDefault();sendFile(e.dataTransfer.files[0])});
+$('#tx').addEventListener('paste',e=>{const f=e.clipboardData&&e.clipboardData.files[0];if(f){e.preventDefault();sendFile(f)}});
+let rec=null;
+$('#mic').onclick=async()=>{if(rec){rec.stop();return}
+ try{const st=await navigator.mediaDevices.getUserMedia({audio:true}),mt=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(x=>window.MediaRecorder&&MediaRecorder.isTypeSupported(x));
+  if(!mt){st.getTracks().forEach(t=>t.stop());return toast('Browser tidak mendukung perekaman suara.')}
+  const r=new MediaRecorder(st,{mimeType:mt,audioBitsPerSecond:12000}),ch=[];rec=r;$('#mic').classList.add('rec');toast('Merekam (maks 15 detik). Tekan lagi untuk mengirim.');
+  const tm=setTimeout(()=>r.state!=='inactive'&&r.stop(),15000);r.ondataavailable=e=>ch.push(e.data);
+  r.onstop=async()=>{clearTimeout(tm);st.getTracks().forEach(t=>t.stop());rec=null;$('#mic').classList.remove('rec');const b=new T(await new Blob(ch).arrayBuffer());
+   if(!b.length)return;if(b.length>MAXB)return toast('Rekaman terlalu besar.');sendMsg({ty:'aud',mt:mt.split(';')[0],nm:'Pesan suara'},b)};r.start()}
+ catch(e){toast('Mikrofon tidak bisa diakses.')}};
+
+/* ===== Pesan menghilang / terkunci + buka dengan kunci ===== */
+function lockMsg(m){if(!m.fr||m.locked)return;if(m.url){URL.revokeObjectURL(m.url);m.url=null}m.text='';m.locked=true;const e=S.els.get(m.id);if(e)fill(e,m)}
+setInterval(()=>{const t=Date.now();let ch=false;S.msgs.forEach(m=>{if(m.locked||!m.exp)return;if(t>=m.exp){lockMsg(m);ch=true}else{const e=S.els.get(m.id);if(e)e._pg.firstChild.style.width=((m.exp-t)/S.lockMs*100)+'%'}});if(ch)later()},500);
+const askKey=()=>{if(S.spy)return toast('Penyadap tidak punya kunci.');if(!S.msgs.some(m=>m.locked))return toast('Tidak ada pesan terkunci.');$('#kqe').textContent='';$('#kq').classList.add('on');$('#kqi').focus()};
+$('#unl').onclick=$('#unl2').onclick=askKey;$('#kqc').onclick=()=>{$('#kq').classList.remove('on');$('#kqi').value=''};
+async function unlockAll(){const pw=$('#kqi').value;if(!pw)return;$('#kqe').textContent='Memeriksa kunci\u2026';
+ const c=await mkKey(pw,S.room);if(c.tag!==S.tag){$('#kqe').textContent='Kunci salah.';return}
+ let n=0;for(const m of S.msgs){if(!m.locked||!m.fr)continue;try{const r=await unseal(m.fr,c.key);if(r.o.k!=='m')continue;const x=mk(r.o,r.bin,m.fr);x.id=m.id;x.rxi=m.rxi;x.eni=m.eni;x.hist=false;Object.assign(m,x);const e=S.els.get(m.id);if(e)fill(e,m);n++}catch(e){}}
+ $('#kqi').value='';$('#kq').classList.remove('on');toast(n+' pesan dibuka'+(S.lockMs?' (terkunci lagi dalam '+S.lockMs/1000+' detik)':''));later()}
+$('#kqo').onclick=unlockAll;$('#kqi').addEventListener('keydown',e=>{if(e.key==='Enter')unlockAll()});
+
+/* ===== Tampilan ===== */
+const tmText=m=>hm(m.ts)+(m.pending?' \u00b7 mengirim\u2026':'')+(m.locked?(m.hist?' \u00b7 riwayat (encode)':' \u00b7 terkunci'):'');
+const label=m=>m.locked?'(terkunci)':m.ty==='t'?m.text:(m.ty==='img'?'Gambar ':m.ty==='aud'?'Pesan suara ':'File ')+(m.ty==='aud'?'':m.nm+' ')+'('+kb(m.sz)+')';
+function build(m){const w=document.createElement('div');w._nm=document.createElement('div');w._nm.className='nm';w._b=document.createElement('div');w._t=document.createElement('div');w._t.className='tm';
+ w._pg=document.createElement('div');w._pg.className='pg';w._pg.innerHTML='<i></i>';w.append(w._nm,w._b,w._pg,w._t);w._b.onclick=()=>m.locked&&!S.spy?askKey():inspect(m.id);
+ w._t.onclick=()=>inspect(m.id);w._t.style.cursor='pointer';fill(w,m);return w}
+function fill(w,m){w.className='m'+(m.mine&&!m.locked?' me':'');const b=w._b;b.className='b'+(m.locked?' lock':'')+(!m.locked&&(m.ty==='img'||m.ty==='aud')?' med':'');b.innerHTML='';
+ w._nm.style.display=m.mine||m.locked?'none':'';w._nm.textContent=m.name||'';w._nm.style.color=m.color||'';
+ if(m.locked)b.textContent='\uD83D\uDD12 '+garble(m.fr.subarray(0,40));
+ else if(m.ty==='img'){const i=new Image();i.src=m.url;i.alt=m.nm;i.onclick=e=>{e.stopPropagation();open(m.url)};b.appendChild(i)}
+ else if(m.ty==='aud'){const a=document.createElement('audio');a.controls=true;a.src=m.url;a.onclick=e=>e.stopPropagation();b.appendChild(a)}
+ else if(m.ty==='file'){const a=document.createElement('a');a.className='f';a.href=m.url;a.download=m.nm||'file';a.onclick=e=>e.stopPropagation();
+  a.innerHTML='<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5"/></svg>';const s=document.createElement('span');s.textContent=m.nm+' \u00b7 '+kb(m.sz);a.appendChild(s);b.appendChild(a)}
+ else b.textContent=m.text;
+ w._pg.style.display=m.locked||!m.exp?'none':'block';w._pg.firstChild.style.width='100%';w._t.textContent=tmText(m)}
+function refreshSel(){S.els.forEach((e,id)=>e._b.classList.toggle('sel',id===S.sel))}
+function renderMsgs(){const box=$('#msgs'),near=box.scrollHeight-box.scrollTop-box.clientHeight<90;
+ while(S.msgs.length>300){const o=S.msgs.shift(),e=S.els.get(o.id);if(e){e.remove();S.els.delete(o.id)}o.url&&URL.revokeObjectURL(o.url)}
+ S.msgs.forEach(m=>{let e=S.els.get(m.id);if(!e){e=build(m);S.els.set(m.id,e);box.appendChild(e)}else e._t.textContent=tmText(m)});
+ refreshSel();if(near||(S.msgs.at(-1)&&S.msgs.at(-1).mine))box.scrollTop=box.scrollHeight}
+function renderSide(){const all=[[S.me.id,{n:S.me.name,c:S.me.color}],...[...S.members].filter(([id])=>id!==S.me.id)];
+ const txt=S.spy?'Penyadap: tanpa daftar peserta':all.length+' online';$('#mc').textContent=txt;$('#sub').textContent=txt+' \u00b7 terenkripsi';
+ $('#mem').innerHTML=S.spy?'':all.map(([id,m])=>`<div class="mem"><span class="av" style="background:${m.c}">${String(m.n)[0].toUpperCase()}</span><span>${String(m.n).replace(/[&<>"]/g,'')}${id===S.me.id?' <span class="mut">(kamu)</span>':''}</span></div>`).join('');
+ const t=Object.values(S.typing).filter(x=>Date.now()-x.t<3500).map(x=>x.n);$('#typing').textContent=t.length?t.join(', ')+' sedang mengetik\u2026':''}
+const stat=r=>`<div class="mut">${r.nf} frame \u00b7 pelanggaran polaritas ${r.v} \u00b7 error parity ${r.pe} \u00b7 error start/stop ${r.fe}</div>`+((r.v+r.pe+r.fe)?'<span class="warn">Sinyal rusak.</span>':`<span class="mut">Semua frame valid. Frame dengan ekor (DC residu): ${r.tail}.</span>`);
+async function leak(){const el=$('#lk2');el.textContent='Mengambil\u2026';try{const rows=await dbGet('',true);
+ el.innerHTML=rows.length?rows.map(r=>{const by=unpack(unb64(r.frame)).subarray(0,66);return `<div class="w"><div class="mut">id ${r.id} \u00b7 room ${r.room.slice(0,12)}\u2026 \u00b7 ${hm(Date.parse(r.created_at))}</div><div class="lv">${lvH(sym(by,48),0)}</div><code>${garble(by.subarray(0,40))}</code></div>`}).join(''):'<span class="mut">Database kosong.</span>'}catch(e){el.textContent='Gagal membaca database.'}}
+function renderIns(){const el=$('#ins');
+ if(S.tab==='wire'){el.innerHTML='<p class="mut" style="margin-top:0">Yang terlihat oleh penyadap di jalur: sinyal pseudoternary dan byte yang tampak acak.</p>'+(S.wire.map(w=>`<div class="w"><div class="mut">${hm(w.t)} \u00b7 ${w.kind==='m'?'pesan':'kehadiran'} \u00b7 ${kb(w.nb)}</div><div class="lv">${lvH(w.pre.slice(0,48),w.ns)}</div><code>${w.g}</code>${(w.v+w.pe+w.fe)?'<span class="warn">sinyal rusak</span>':''}</div>`).join('')||'<p class="mut">Belum ada lalu lintas.</p>')+
+  '<div class="st" style="margin-top:16px"><b>Simulasi kebocoran database</b><span class="mut">Yang didapat pencuri data: hanya baris terenkripsi, tanpa nama, teks, atau nama ruang.</span><div><button class="btn ghost" id="lkb" style="padding:8px 16px;margin:8px 0">Ambil isi database</button></div><div id="lk2"></div></div>';$('#lkb').onclick=leak;return}
+ const m=S.msgs.find(x=>x.id===S.sel)||S.msgs.at(-1);if(!m){el.innerHTML='<p class="mut" style="margin-top:0">Pilih pesan untuk melihat proses encoding dan decoding-nya.</p>';return}
+ let h='';const e=m.eni,r=m.rxi;
+ if(m.mine&&e){h+=`<div class="st"><b>Encoding</b></div><div class="st"><span class="mut">1. Isi</span><div class="tt"></div></div>`;
+  if(!m.locked&&m.ty==='t'&&te.encode(m.text)[0]!==undefined)h+=`<div class="st"><span class="mut">Contoh 1 huruf = 1 frame: \u201C${m.text[0].replace(/[<&]/g,'?')}\u201D, polaritas awal ${S.hi?'+V':'\u2212V'}, parity ${S.par==='e'?'even':'odd'}</span>${frameDemo(te.encode(m.text)[0])}</div>`;
+  h+=`<div class="st"><span class="mut">2. Paket terenkripsi (AES-256-GCM, dipadatkan ke ukuran blok)</span><code>${e.hx}</code></div><div class="st"><span class="mut">3. Framing tiap byte: START + 8 bit data + PARITY + STOP</span><code>${e.ns/11} frame \u00d7 11 simbol = ${e.ns} simbol</code></div><div class="st"><span class="mut">4. Sinyal pseudoternary (bit 1 \u2192 0 V, bit 0 \u2192 \u00b1V bergantian)</span><div class="lv">${lvH(e.pre,e.ns)}</div>${wave(e.pre)}${m.noisy?'<span class="warn">Gangguan jalur disimulasikan pada pesan ini.</span>':''}</div>`}
+ if(r)h+=`<div class="st"><b>Decoding</b></div><div class="st"><span class="mut">1. Sinyal diterima</span><div class="lv">${lvH(r.pre,r.ns)}</div>${wave(r.pre)}</div><div class="st"><span class="mut">2. Cek frame, lalu bit frame (START, PARITY, STOP) dibuang</span>${stat(r)}</div><div class="st"><span class="mut">3. Bit data saja (tanpa bit frame)</span><code>${r.bp}\u2026</code></div><div class="st"><span class="mut">4. Byte terenkripsi</span><code>${r.hx}</code></div><div class="st"><span class="mut">5. Dekripsi</span><div class="${m.locked?'warn':'ok'} dd"></div></div>`;
+ else h+='<p class="mut">Menunggu pesan kembali dari jalur untuk didekode.</p>';
+ el.innerHTML=h;const a=el.querySelector('.tt');if(a)a.textContent=label(m);const d=el.querySelector('.dd');
+ if(d)d.textContent=m.locked?(S.spy?'Tidak bisa dibuka: penyadap tidak punya kunci.':'Terkunci. Masukkan kunci privat untuk membuka (atau kunci salah / data diubah).'):'Berhasil: '+label(m)+' (keaslian terverifikasi)'}
+</script>
+</body>
+</html>
